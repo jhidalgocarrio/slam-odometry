@@ -93,21 +93,25 @@ void FootContact::update(const odometry::BodyContactState& bs, const Eigen::Quat
     int count = 0;
     for( size_t i=0; i < state.getPrevious().points.size(); i++ )
     {
-	const odometry::BodyContactPoint &prevPoint( state.getPrevious().points[i] );
-	const odometry::BodyContactPoint &point( state.getCurrent().points[i] );
+        const odometry::BodyContactPoint &prevPoint( state.getPrevious().points[i] );
+        const odometry::BodyContactPoint &point( state.getCurrent().points[i] );
 
-	if( prevPoint.contact >= contact_threshold 
-		&& point.contact >= contact_threshold )
-	{
-	    sum += prevPoint.position - delta_rotq * point.position;
-	    if( config.useZeroVelocity )
-		zeroCheck += (prevPoint.position - point.position).squaredNorm();
-	    count++;
-	}
+        if( prevPoint.contact >= contact_threshold 
+            && point.contact >= contact_threshold )
+        {
+            sum += prevPoint.position - delta_rotq * point.position;
+            if( config.useZeroVelocity )
+            zeroCheck += (prevPoint.position - point.position).squaredNorm();
+            count++;
+        }
     }
+
     Eigen::Vector3d mean = sum;
-    if( count > 0 ) 
-	mean /= count;
+    if (mean[0] < 0.00)
+        mean[0] = -mean[0];
+
+    if( count > 0 )
+    	mean /= count;
 
     base::Pose delta_pose( mean, delta_rotq );
 
@@ -115,7 +119,7 @@ void FootContact::update(const odometry::BodyContactState& bs, const Eigen::Quat
     // TODO this is based on the wheel odometry error model I think it could be
     // more accurate by looking the the covariance of the contact position
     // differences 
-    
+
     double tilt = acos(Eigen::Vector3d::UnitZ().dot(orientation*Eigen::Vector3d::UnitZ()));
     double d = mean.norm();
     double dtheta = Eigen::AngleAxisd( delta_rotq ).angle();
@@ -126,13 +130,12 @@ void FootContact::update(const odometry::BodyContactState& bs, const Eigen::Quat
 	tilt * config.tiltError.toVector4d() +
 	dtheta * config.dthetaError.toVector4d();
 
-    const double zeroVelocityThreshold = 1e-9;
+    const double zeroVelocityThreshold = 1.0e-09;
     if( config.useZeroVelocity && zeroCheck < zeroVelocityThreshold )
     {
-	delta_pose = base::Pose();
-	vec.setZero();
+	    delta_pose = base::Pose();
+    	vec.setZero();
     }
-
     Vector6d var;
     var << 0, 0, vec.w(), vec.head<3>();
 
